@@ -13,13 +13,14 @@
 \usepackage{microtype}
 \usepackage{xcolor}
 \usepackage{graphicx}
+\usepackage{float}
 
-\title{Assignment 1: [Your Method Name]}
+\title{Assignment 1: A Mixture-Scale Random-Walk Metropolis Sampler}
 
 \author{%
-  Your Name \\
+  Jiaxi Li \\
   Boston University \\
-  \texttt{your-email@bu.edu}
+  \texttt{lijiaxi@bu.edu}
 }
 
 \begin{document}
@@ -27,44 +28,148 @@
 \maketitle
 
 \begin{abstract}
-A one-paragraph summary of your method, key results, and main takeaways.
+This paper proposes a mixture-scale random-walk Metropolis--Hastings (MS-RWMH) sampler that combines local anisotropic exploration with occasional global isotropic jumps to improve robustness when sampling from geometrically challenging distributions. The method is evaluated on the Rosenbrock distribution and Neal’s Funnel and compared with Random-Walk Metropolis--Hastings (RWMH) and Hamiltonian Monte Carlo (HMC). In empirical evaluation, MS-RWMH provides more robust and balanced sampling than vanilla RWMH while remaining simpler and less tuning-sensitive than HMC, demonstrating the practical value of mixture-scale proposals for heterogeneous geometries.
 \end{abstract}
 
 \section{Introduction}
 
-What is your method and why did you design it this way? What problem or limitation of existing methods does it address?
+% What is your method and why did you design it this way? What problem or limitation of existing methods does it address?
 
 % Your content here
+Markov chain Monte Carlo (MCMC) methods are widely used for sampling from complex probability distributions in Bayesian inference and scientific computing. Among standard algorithms, Random-Walk Metropolis--Hastings (RWMH) is simple but often mixes slowly in curved or ill-scaled geometries, while Hamiltonian Monte Carlo (HMC) enables more efficient exploration but requires gradient information and careful tuning.
+
+These limitations become evident on challenging targets such as the Rosenbrock distribution and Neal’s Funnel, which exhibit strong curvature and scale heterogeneity. In such settings, random-walk proposals mix poorly, whereas gradient-based methods may show high variance and sensitivity to tuning, highlighting the difficulty of achieving robust performance across geometries.
+
+To address this issue, this paper proposes a mixture-scale random-walk Metropolis sampler that combines local anisotropic moves with occasional global isotropic jumps within a unified Metropolis--Hastings framework. The proposed method is evaluated against RWMH and HMC on both benchmarks and demonstrates more robust and balanced sampling behavior while preserving the simplicity of random-walk methods.
 
 \section{Method}
 
-Technical description of your algorithm. Include pseudocode if helpful.
+%Technical description of your algorithm. Include pseudocode if helpful.
 
 % Your content here
 
+\subsection{Mixture-Scale Random-Walk Metropolis Sampler}
+
+This work introduces a mixture-scale random-walk Metropolis--Hastings (MS-RWMH) sampler that combines local and global proposal mechanisms within a single Markov transition kernel. The construction is motivated by the observation that single-scale random-walk proposals struggle in targets with strong curvature or scale heterogeneity: small steps mix slowly in flat regions, while large steps are frequently rejected in narrow high-density regions. A natural remedy is to alternate between local exploratory moves and occasional large jumps, leading to a mixture proposal within the Metropolis--Hastings framework.
+
+Let $\pi(x) \propto \exp(\log p(x))$ denote the target density. Given the
+current state $x_t$, each iteration proceeds as follows:
+
+\begin{enumerate}
+\item \textbf{Mixture selection.}
+Sample $b_t \sim \mathrm{Bernoulli}(p_{\mathrm{global}})$.
+
+\item \textbf{Proposal generation.}
+If $b_t = 0$, draw a local anisotropic proposal
+\[
+x' = x_t + \epsilon, \quad
+\epsilon \sim \mathcal{N}(0, \mathrm{diag}(\sigma^2_{\mathrm{local}})).
+\]
+If $b_t = 1$, draw a global isotropic proposal
+\[
+x' = x_t + \eta, \quad
+\eta \sim \mathcal{N}(0, \sigma^2_{\mathrm{global}} I).
+\]
+
+\item \textbf{Metropolis acceptance.}
+Accept with probability
+\[
+\alpha(x_t, x') = \min\{1, \exp(\log p(x') - \log p(x_t))\}.
+\]
+\end{enumerate}
+
+\subsection{Validity of the Transition Kernel}
+
+Each proposal component is symmetric and individually satisfies detailed balance with respect to $\pi(x)$. Because the overall transition kernel is a fixed-probability mixture of reversible kernels, the resulting Markov chain also preserves $\pi(x)$ as its stationary distribution. This construction retains the correctness guarantees of Metropolis--Hastings while enabling improved exploration across multiple geometric scales. This detailed balance condition ensures that the Markov chain spends time in
+each region proportional to the posterior probability, yielding correct
+sampling in equilibrium.
+
+
 \section{Experiments}
 
-Results on both benchmarks. Include visualizations (samples, traces) and quantitative diagnostics (ESS, acceptance rates). Compare to vanilla MH and HMC baselines.
+%Results on both benchmarks. Include visualizations (samples, traces) and quantitative diagnostics (ESS, acceptance rates). Compare to vanilla MH and HMC baselines.
 
 % Your content here
 % Tip: Use \includegraphics to add figures from your notebook
 
+We evaluate MS-RWMH on the Rosenbrock distribution and Neal’s Funnel and compare it with RWMH and HMC using acceptance rates, effective sample size (ESS), and autocorrelation diagnostics.
+
+\textbf{Rosenbrock.}
+On this curved but single-scale geometry, tuned RWMH achieves stable sampling with effective sample sizes on the order of $10^4$, indicating low
+autocorrelation and near-independent successive samples. HMC explores a
+broader region but exhibits larger variance and slower autocorrelation decay, resulting in reduced statistical efficiency. MS-RWMH matches the concentration behavior of RWMH while maintaining high ESS and rapid decorrelation, demonstrating that occasional global proposals do not degrade performance in smoothly curved targets.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/rosenbrock_samples.png}
+\caption{Posterior samples on the Rosenbrock distribution for RWMH, HMC,
+and MS-RWMH. RWMH and MS-RWMH concentrate along the curved valley,
+while HMC shows larger variance and slower decorrelation.}
+\label{fig:rosenbrock_samples}
+\end{figure}
+
+
+\textbf{Neal’s Funnel.}
+This multi-scale geometry highlights the benefit of mixture proposals.
+In Neal’s Funnel, probability mass concentrates in thin typical sets across widely varying scales, making exploration with fixed-scale random walks difficult. Vanilla RWMH therefore struggles to recover the correct latent scale, while HMC achieves broader exploration but exhibits high variance and sensitivity to tuning. MS-RWMH improves scale recovery and produces more balanced exploration with reasonable acceptance rates, demonstrating increased robustness without requiring gradient information.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/funnel_samples.png}
+\caption{Posterior samples on Neal’s Funnel for RWMH, HMC, and MS-RWMH.
+MS-RWMH improves scale recovery and produces more balanced exploration
+than RWMH while remaining more stable than HMC.}
+\label{fig:funnel_samples}
+\end{figure}
+
+
+
+\subsection{Hyperparameter Sensitivity}
+
+Grid search over $(\sigma_{\text{local}}, p_{\text{global}},
+\sigma_{\text{global}})$ reveals distinct optimal regimes. Rosenbrock favors moderate global-move probability ($p_{\text{global}}\approx0.1$), whereas Neal's Funnel benefits from larger local scales and higher global frequency ($p_{\text{global}}\approx0.5$). These trends reflect the differing geometric difficulties of the two targets and highlight the adaptability of mixture-scale proposals.
+
+Overall, MS-RWMH improves robustness across both curved and scale-separated
+distributions while remaining simpler than gradient-based samplers.
+
+
 \section{Discussion}
 
-Where does your method work well? Where does it struggle? What would you try next?
+% Where does your method work well? Where does it struggle? What would you try next?
 
 % Your content here
+
+MS-RWMH performs comparably to tuned RWMH on the Rosenbrock distribution,
+achieving high ESS and rapid decorrelation while preserving accurate sampling along the curved valley. In contrast, Neal’s Funnel highlights a key strength of the method: improved recovery of latent scale and more stable exploration compared with RWMH, while avoiding the gradient dependence and tuning sensitivity of HMC. This contrast is consistent with the theoretical advantage of gradient-based methods, where Hamiltonian dynamics follow level sets of the posterior and thereby reduce random-walk diffusion and autocorrelation.
+
+The experiments further indicate that effective performance in multi-scale
+geometries depends strongly on appropriate scale tuning rather than on the
+proposal form alone. While the mixture construction improves robustness to
+geometric heterogeneity, selecting suitable local and global proposal scales remains challenging and problem dependent, reflecting an inherent coupling between sampler behavior and target geometry rather than a limitation specific to the proposed method.
+
+A remaining limitation is the need to manually select proposal scales, and
+isotropic global moves may become inefficient in higher-dimensional or strongly anisotropic targets. This behavior is consistent with the classical step-size trade-off in Metropolis methods, where overly small proposals slow exploration while overly large proposals lead to frequent rejection. Future work could explore adaptive mixture probabilities or hybrid gradient-informed proposals to improve efficiency while maintaining robustness.
+
+
 
 \section{AI Collaboration}
 
-Reflect on your use of AI assistants:
-\begin{itemize}
-    \item Which AI tools did you use and for what purposes? Through what interfaces (e.g., chat, code completion, coding agents, $\ldots$)?
-    \item What prompting strategies were effective? What kind of context or instructions helped?
-    \item Where did the AI provide useful ideas vs.\ where did you need to correct or guide it?
-    \item What did you learn about working with AI on technical problems?
-\end{itemize}
+%Reflect on your use of AI assistants:
+%\begin{itemize}
+%    \item Which AI tools did you use and for what purposes? Through what %interfaces (e.g., chat, code completion, coding agents, $\ldots$)?
+%    \item What prompting strategies were effective? What kind of context or instructions helped?
+%    \item Where did the AI provide useful ideas vs.\ where did you need to correct or guide it?
+%    \item What did you learn about working with AI on technical problems?
+%\end{itemize}
 
 % Your content here
+
+AI assistants were used to clarify MCMC concepts, support debugging, and improve the organization of code and written explanations. They were particularly useful for interpreting diagnostics such as ESS and autocorrelation and for suggesting possible sampler design directions.
+
+However, AI-generated responses often lacked awareness of the overall assignment context, produced repetitive or incorrect code, and sometimes gave contradictory recommendations across different interactions. Determining correct parameter adjustments and diagnosing the causes of poor sampling behavior required careful human reasoning and validation.
+
+This experience highlights that AI tools are valuable for accelerating iteration and explaining theoretical intuition, but reliable scientific conclusions still depend on deliberate manual analysis and verification.
+
+
 
 \end{document}
